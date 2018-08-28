@@ -51,6 +51,7 @@ except ImportError:
     from ansible.parsing.mod_args import ModuleArgsParser
     from ansible.parsing.yaml.constructor import AnsibleConstructor
     from ansible.parsing.yaml.loader import AnsibleLoader
+    from ansible.parsing.yaml.objects import AnsibleMapping
     from ansible.errors import AnsibleParserError
     ANSIBLE_VERSION = 2
 
@@ -571,3 +572,40 @@ def parse_yaml_linenumbers(data, filename):
     except (yaml.parser.ParserError, yaml.scanner.ScannerError) as e:
         raise SystemExit("Failed to parse YAML in %s: %s" % (filename, str(e)))
     return data
+
+def parse_yaml_vars(data, filename):
+    lines = data.split('\n')
+
+    yaml_root_vars = []
+    var_buffer = []
+    buffer_line_number = 0
+    for line_number, line in enumerate(lines, start=1):
+        if line.strip() == '' or line.strip().startswith('#'):
+            continue
+        if line.lstrip() == line:
+            if len(var_buffer) == 0:
+                var_buffer.append(line.rstrip())
+                buffer_line_number = line_number
+            else:
+                l = AnsibleLoader('\n'.join(var_buffer))
+                data = l.get_single_data()
+                if not isinstance(data, AnsibleMapping):
+                    break
+                yaml_root_vars.append({'key': data.keys()[0],
+                                       'value': data.values()[0],
+                                       '__line__': buffer_line_number,
+                                       '__filename__': filename})
+                var_buffer = [line.rstrip()]
+                buffer_line_number = line_number
+        else:
+            var_buffer.append(line.rstrip())
+    else:
+        l = AnsibleLoader('\n'.join(var_buffer))
+        data = l.get_single_data()
+        if isinstance(data, AnsibleMapping):
+            yaml_root_vars.append({'key': data.keys()[0],
+                                   'value': data.values()[0],
+                                   '__line__': buffer_line_number,
+                                   '__filename__': filename})
+
+    return yaml_root_vars
