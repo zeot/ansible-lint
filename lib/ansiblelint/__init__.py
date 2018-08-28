@@ -42,6 +42,7 @@ class AnsibleLintRule(object):
     match = None
     matchtask = None
     matchplay = None
+    matchvar = None
 
     def matchlines(self, file, text):
         matches = []
@@ -99,6 +100,21 @@ class AnsibleLintRule(object):
                                              section, file['path'], self, message))
         return matches
 
+    def matchvars(self, file, text):
+        matches = []
+        if not self.matchvar:
+            return matches
+        yaml_lines = ansiblelint.utils.parse_yaml_vars(text, file['path'])
+        for line in yaml_lines:
+            result = self.matchvar(file, line)
+            if result:
+                message = None
+                if isinstance(result, str):
+                    message = result
+                matches.append(Match(line['__line__'], line, file['path'], self, message))
+        return matches
+
+
 
 class RulesCollection(object):
 
@@ -138,6 +154,7 @@ class RulesCollection(object):
                     matches.extend(rule.matchlines(playbookfile, text))
                     matches.extend(rule.matchtasks(playbookfile, text))
                     matches.extend(rule.matchyaml(playbookfile, text))
+                    matches.extend(rule.matchvars(playbookfile, text))
 
         return matches
 
